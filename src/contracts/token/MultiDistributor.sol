@@ -15,7 +15,6 @@ import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 
 contract MultiDistributor is Ownable {
   struct UserClaim {
-    address user;
     IERC20 token;
     uint amount;
     bool approved;
@@ -50,7 +49,7 @@ contract MultiDistributor is Ownable {
   //////////////////////////////
 
   /**
-   * @notice Whitelists the address to create claims.
+   * @notice Setter to whitelist an address to create claims.
    *
    * @param _user The address to be added or removed.
    * @param _whitelist Boolean on whether the address is being added or removed.
@@ -61,7 +60,7 @@ contract MultiDistributor is Ownable {
   }
 
   /**
-   * @notice Whitelists the address to create claims.
+   * @notice Allows owner to approve or unapprove claimIds.
    *
    * @param claimIds The list of claimIds to approve or unapprove
    * @param approve Bool on whether the ids are being approved or not 
@@ -90,16 +89,16 @@ contract MultiDistributor is Ownable {
 
     for (uint i = 0; i < claimsToAdd.length; i++) {
       UserTokenAmounts memory claimToAdd = claimsToAdd[i];
-      UserClaim memory newClaim = UserClaim(claimToAdd.user, claimToAdd.token, claimToAdd.amount, false);
+      UserClaim memory newClaim = UserClaim(claimToAdd.token, claimToAdd.amount, false);
       userToClaimIds[claimToAdd.user][nextId] = newClaim;
       nextId++;
 
-      emit ClaimAdded(claimToAdd.token, newClaim.user, newClaim.amount, nextId, epochTimestamp, tag);
+      emit ClaimAdded(claimToAdd.token, claimToAdd.user, newClaim.amount, nextId, epochTimestamp, tag);
     }
   }
 
   /**
-   * @notice Allows whitelisted addresses to remove claims.
+   * @notice Allows whitelisted addresses to remove claims. //todo maybe this should be owner-only?
    * @param removeList List of user and claimIds to remove
    */
   function removeClaims(UserAndClaimId[] memory removeList) external {
@@ -122,6 +121,10 @@ contract MultiDistributor is Ownable {
   //   External Functions   //
   ////////////////////////////
 
+  /**
+   * @notice Allows user to redeem a list of claimIds.
+   * @param claimList List of claimIds to claim
+   */
   function claim(UserAndClaimId[] memory claimList) external {
     for (uint i = 0; i < claimList.length; i++) {
       uint claimId = claimList[i].claimId;
@@ -143,18 +146,23 @@ contract MultiDistributor is Ownable {
     }
   }
 
+  /**
+   * @notice Returns approved pending claimIds for a user.
+   * @param user User claims to check
+   * @param claimIds The list of claimIds to claim
+   */
   function getClaimableForAddress(address user, uint[] memory claimIds) 
     external
     view
-    returns (UserTokenAmounts[] memory claimable)
+    returns (UserClaim[] memory claimable)
   {
-    claimable = new UserTokenAmounts[](claimIds.length);
+    claimable = new UserClaim[](claimIds.length);
 
     for (uint i = 0; i < claimIds.length; i++) {
       UserClaim memory potentialClaim = userToClaimIds[user][claimIds[i]];
 
       if (potentialClaim.amount > 0 && potentialClaim.approved == true) {
-        claimable[i] = UserTokenAmounts(user, potentialClaim.token, potentialClaim.amount);
+        claimable[i] = UserClaim(potentialClaim.token, potentialClaim.amount, potentialClaim.approved);
       }
     }
   }
@@ -183,6 +191,6 @@ contract MultiDistributor is Ownable {
   ////////////
 
   error NotWhitelisted(address user);
-  
+
   error ClaimNotApproved(uint claimId);
 }
