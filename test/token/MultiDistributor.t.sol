@@ -9,7 +9,7 @@ import "test/shared/mocks/MockERC20.sol";
 /**
  * @dev Testing claiming flows for MultiDistributor contract
  */
-contract MultiDistributorTest {
+contract MultiDistributorTest is Test {
   uint public constant DEFAULT_MINT = 10_000e18;
 
   address alice = address(0xaa);
@@ -22,14 +22,13 @@ contract MultiDistributorTest {
   MockERC20 op;
 
   function setUp() public {
-    console.log("SETUP");
     tokenDistributor = new MultiDistributor();
 
     lyra = new MockERC20("LYRA", "LYRA");
     op = new MockERC20("OP", "OP");
-    
-    lyra.mint(tokenDistributor, DEFAULT_MINT);
-    op.mint(tokenDistributor, DEFAULT_MINT);
+
+    lyra.mint(address(tokenDistributor), DEFAULT_MINT);
+    op.mint(address(tokenDistributor), DEFAULT_MINT);
 
     tokenDistributor.setWhitelistAddress(whitelist, true);
   }
@@ -40,33 +39,178 @@ contract MultiDistributorTest {
     assertEq(tokenDistributor.whitelisted(whitelist), false);
   }
 
+  // Check whitelisted addresses can add to claims
   function testCanAddToClaims() public {
     vm.startPrank(whitelist);
-    MultiDistributor.UserTokenAmounts[] memory claimsToAdd = _createClaims(1000e18);
+    uint lyraAmount = 1000e18;
+    uint opAmount = 500e18;
+    MultiDistributor.UserTokenAmounts[] memory claimsToAdd = _createClaims(alice, lyraAmount, opAmount);
 
     tokenDistributor.addToClaims(claimsToAdd, block.timestamp, "");
 
-    MultiDistributor.UserTokenAmounts memory aliceClaim = tokenDistributor.userToClaimIds(alice, 0);
-    console.log("aliceClaim", aliceClaim.amount);
+    (IERC20 token, uint amount, bool approved) = tokenDistributor.userToClaimIds(alice, 0);
+    (IERC20 token1, uint amount1, bool approved1) = tokenDistributor.userToClaimIds(alice, 1);
+    assertEq(amount, lyraAmount);
+    assertEq(approved, false);
+    assertEq(amount1, opAmount);
+    assertEq(approved1, false);
   }
 
+  // Check not whitelisted addresses CANNOT add to claims
   function testCannotAddToClaims() public {
     vm.startPrank(alice);
-    MultiDistributor.UserTokenAmounts[] memory claimsToAdd = _createClaims(1000e18);
+    MultiDistributor.UserTokenAmounts[] memory claimsToAdd = _createClaims(alice, 1000e18, 1000e18);
 
-    vm.expectRevert(abi.encodeWithSelector(MultiDistributor.NotWhitelisted, alice));
+    vm.expectRevert(abi.encodeWithSelector(MultiDistributor.NotWhitelisted.selector, alice));
     tokenDistributor.addToClaims(claimsToAdd, block.timestamp, "");
   }
 
+  // Check user can claim their approved claimId
   function testCanClaimIfApproved() public {
-    console.log("Can claim");
+    vm.startPrank(whitelist);
+    uint lyraAmount = 1000e18;
+    uint opAmount = 500e18;
+    MultiDistributor.UserTokenAmounts[] memory claimsToAdd = _createClaims(alice, lyraAmount, opAmount);
+
+    tokenDistributor.addToClaims(claimsToAdd, block.timestamp, "");
+    vm.stopPrank();
+
+    MultiDistributor.UserAndClaimId[] memory ids = new MultiDistributor.UserAndClaimId[](2);
+    ids[0].user = alice;
+    ids[0].claimId = 0;
+    ids[1].user = alice;
+    ids[1].claimId = 1;
+
+    tokenDistributor.approveClaims(ids, true);
+
+    vm.startPrank(alice);
+
+    tokenDistributor.claim(ids);
+    uint lyraBal = lyra.balanceOf(alice);
+    uint opBal = op.balanceOf(alice);
+
+    assertEq(lyraBal, lyraAmount);
+    assertEq(opBal, opAmount);
   }
 
+  // Check user CANNOT claim their unapproved claimId
+  function testCannotClaimIfNotApproved() public {
+    vm.startPrank(whitelist);
+    uint lyraAmount = 1000e18;
+    uint opAmount = 500e18;
+    MultiDistributor.UserTokenAmounts[] memory claimsToAdd = _createClaims(alice, lyraAmount, opAmount);
 
-  function _createClaims(uint amount) internal returns (MultiDistributor.UserTokenAmounts[] memory claimsToAdd) {
-    MultiDistributor.UserTokenAmounts[] memory claimsToAdd; 
-    MultiDistributor.UserTokenAmounts memory lyraClaim = MultiDistributor.UserTokenAmounts(alice, lyra, amount);
-    MultiDistributor.UserTokenAmounts memory opClaim = MultiDistributor.UserTokenAmounts(alice, op, amount);
+    tokenDistributor.addToClaims(claimsToAdd, block.timestamp, "");
+    vm.stopPrank();
+
+    MultiDistributor.UserAndClaimId[] memory ids = new MultiDistributor.UserAndClaimId[](2);
+    ids[0].user = alice;
+    ids[0].claimId = 0;
+    ids[1].user = alice;
+    ids[1].claimId = 1;
+
+    vm.startPrank(alice);
+    vm.expectRevert(abi.encodeWithSelector(MultiDistributor.ClaimNotApproved.selector, 0));
+    tokenDistributor.claim(ids);
+  }
+
+  function testCanRemoveClaim() public {
+    vm.startPrank(whitelist);
+    uint lyraAmount = 1000e18;
+    uint opAmount = 500e18;
+    MultiDistributor.UserTokenAmounts[] memory claimsToAdd = _createClaims(alice, lyraAmount, opAmount);
+
+    tokenDistributor.addToClaims(claimsToAdd, block.timestamp, "");
+
+    (IERC20 token, uint amount, bool approved) = tokenDistributor.userToClaimIds(alice, 0);
+    (IERC20 token1, uint amount1, bool approved1) = tokenDistributor.userToClaimIds(alice, 1);
+    assertEq(amount, lyraAmount);
+    assertEq(amount1, opAmount);
+
+    MultiDistributor.UserAndClaimId[] memory ids = new MultiDistributor.UserAndClaimId[](2);
+    ids[0].user = alice;
+    ids[0].claimId = 0;
+    ids[1].user = alice;
+    ids[1].claimId = 1;
+
+    tokenDistributor.removeClaims(ids);
+
+    (token, amount, approved) = tokenDistributor.userToClaimIds(alice, 0);
+    (token1, amount1, approved1) = tokenDistributor.userToClaimIds(alice, 1);
+    assertEq(amount, 0);
+    assertEq(amount1, 0);
+  }
+
+  // Not whitelisted
+  function testCannotRemoveClaim() public {
+    vm.startPrank(whitelist);
+    uint lyraAmount = 1000e18;
+    uint opAmount = 500e18;
+    MultiDistributor.UserTokenAmounts[] memory claimsToAdd = _createClaims(alice, lyraAmount, opAmount);
+
+    tokenDistributor.addToClaims(claimsToAdd, block.timestamp, "");
+
+    (IERC20 token, uint amount, bool approved) = tokenDistributor.userToClaimIds(alice, 0);
+    (IERC20 token1, uint amount1, bool approved1) = tokenDistributor.userToClaimIds(alice, 1);
+    assertEq(amount, lyraAmount);
+    assertEq(amount1, opAmount);
+
+    MultiDistributor.UserAndClaimId[] memory ids = new MultiDistributor.UserAndClaimId[](2);
+    ids[0].user = alice;
+    ids[0].claimId = 0;
+    ids[1].user = alice;
+    ids[1].claimId = 1;
+
+    vm.stopPrank();
+    tokenDistributor.removeClaims(ids);
+
+    (token, amount, approved) = tokenDistributor.userToClaimIds(alice, 0);
+    (token1, amount1, approved1) = tokenDistributor.userToClaimIds(alice, 1);
+    assertEq(amount, 0);
+    assertEq(amount1, 0);
+  }
+
+  function testCanGetClaimableForAddress() public {
+    vm.startPrank(whitelist);
+    uint lyraAmount = 1000e18;
+    uint opAmount = 500e18;
+    MultiDistributor.UserTokenAmounts[] memory claimsToAdd = _createClaims(alice, lyraAmount, opAmount);
+
+    tokenDistributor.addToClaims(claimsToAdd, block.timestamp, "");
+
+    uint[] memory ids = new uint[](2);
+    ids[0] = 0;
+    ids[1] = 1;
+    MultiDistributor.UserClaim[] memory claimable = tokenDistributor.getClaimableForAddress(alice, ids);
+    console.log("LOL", claimable[0].amount);
+
+    // Should be 0 because not approved
+    assertEq(claimable[0].amount, 0);
+    assertEq(claimable[1].amount, 0);
+
+    vm.stopPrank();
+    MultiDistributor.UserAndClaimId[] memory approveIds = new MultiDistributor.UserAndClaimId[](2);
+    approveIds[0].user = alice;
+    approveIds[0].claimId = 0;
+    approveIds[1].user = alice;
+    approveIds[1].claimId = 1;
+
+    tokenDistributor.approveClaims(approveIds, true);
+
+    claimable = tokenDistributor.getClaimableForAddress(alice, ids);
+
+    // Should be show amounts now that we have approved
+    assertEq(claimable[0].amount, lyraAmount);
+    assertEq(claimable[1].amount, opAmount);
+  }
+
+  function _createClaims(address user, uint lyraAmount, uint opAmount)
+    internal
+    returns (MultiDistributor.UserTokenAmounts[] memory claimsToAdd)
+  {
+    claimsToAdd = new MultiDistributor.UserTokenAmounts[](2);
+    MultiDistributor.UserTokenAmounts memory lyraClaim = MultiDistributor.UserTokenAmounts(user, lyra, lyraAmount);
+    MultiDistributor.UserTokenAmounts memory opClaim = MultiDistributor.UserTokenAmounts(user, op, opAmount);
 
     claimsToAdd[0] = lyraClaim;
     claimsToAdd[1] = opClaim;

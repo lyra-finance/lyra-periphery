@@ -63,7 +63,7 @@ contract MultiDistributor is Ownable {
    * @notice Allows owner to approve or unapprove claimIds.
    *
    * @param claimIds The list of claimIds to approve or unapprove
-   * @param approve Bool on whether the ids are being approved or not 
+   * @param approve Bool on whether the ids are being approved or not
    */
   function approveClaims(UserAndClaimId[] memory claimIds, bool approve) external onlyOwner {
     for (uint i = 0; i < claimIds.length; i++) {
@@ -77,14 +77,12 @@ contract MultiDistributor is Ownable {
 
   /**
    * @notice Allows whitelisted addresses to create new claims.
-   * 
+   *
    * @param claimsToAdd List of user, tokens and amounts to create claims
    * @param epochTimestamp The timestamp for the epoch
    * @param tag Data relating to the claim
    */
-  function addToClaims(UserTokenAmounts[] memory claimsToAdd, uint epochTimestamp, string memory tag)
-    external
-  {
+  function addToClaims(UserTokenAmounts[] memory claimsToAdd, uint epochTimestamp, string memory tag) external {
     if (whitelisted[msg.sender] != true) revert NotWhitelisted(msg.sender);
 
     for (uint i = 0; i < claimsToAdd.length; i++) {
@@ -151,7 +149,7 @@ contract MultiDistributor is Ownable {
    * @param user User claims to check
    * @param claimIds The list of claimIds to claim
    */
-  function getClaimableForAddress(address user, uint[] memory claimIds) 
+  function getClaimableForAddress(address user, uint[] memory claimIds)
     external
     view
     returns (UserClaim[] memory claimable)
@@ -174,7 +172,7 @@ contract MultiDistributor is Ownable {
   event WhitelistAddressSet(address user, bool whitelisted);
 
   event Claimed(IERC20 indexed rewardToken, address indexed claimer, uint indexed claimId, uint amount);
-  
+
   event ClaimAdded(
     IERC20 rewardToken,
     address indexed claimer,
