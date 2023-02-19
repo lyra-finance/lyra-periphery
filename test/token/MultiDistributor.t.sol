@@ -104,7 +104,7 @@ contract MultiDistributorTest is Test {
     tokenDistributor.addToClaims(claimsToAdd, block.timestamp, "");
     vm.stopPrank();
 
-    // Claims are not approved 
+    // Claims are not approved
     MultiDistributor.UserAndClaimId[] memory ids = new MultiDistributor.UserAndClaimId[](2);
     ids[0].user = alice;
     ids[0].claimId = 0;
@@ -117,7 +117,7 @@ contract MultiDistributorTest is Test {
   }
 
   // Allows you to claim the same claimId multiple times but just returns 0
-   function testCanClaimSameAgain() public {
+  function testCanClaimSameAgain() public {
     vm.startPrank(whitelist);
     uint lyraAmount = 1000e18;
     uint opAmount = 500e18;
@@ -152,7 +152,7 @@ contract MultiDistributorTest is Test {
     assertEq(opBal, opAmount);
   }
 
-  // Whitelisted can remove claim 
+  // Whitelisted can remove claim
   function testCanRemoveClaim() public {
     vm.startPrank(whitelist);
     uint lyraAmount = 1000e18;
@@ -266,7 +266,7 @@ contract MultiDistributorTest is Test {
     approveIds[1].claimId = 1;
 
     tokenDistributor.approveClaims(approveIds, true);
-    
+
     vm.startPrank(alice);
     tokenDistributor.claim(approveIds);
 
