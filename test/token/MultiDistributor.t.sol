@@ -61,6 +61,7 @@ contract MultiDistributorTest is Test {
     vm.startPrank(alice);
     MultiDistributor.UserTokenAmounts[] memory claimsToAdd = _createClaims(alice, 1000e18, 1000e18);
 
+    // Alice is not whitelisted
     vm.expectRevert(abi.encodeWithSelector(MultiDistributor.NotWhitelisted.selector, alice));
     tokenDistributor.addToClaims(claimsToAdd, block.timestamp, "");
   }
@@ -103,6 +104,7 @@ contract MultiDistributorTest is Test {
     tokenDistributor.addToClaims(claimsToAdd, block.timestamp, "");
     vm.stopPrank();
 
+    // Claims are not approved 
     MultiDistributor.UserAndClaimId[] memory ids = new MultiDistributor.UserAndClaimId[](2);
     ids[0].user = alice;
     ids[0].claimId = 0;
@@ -114,6 +116,43 @@ contract MultiDistributorTest is Test {
     tokenDistributor.claim(ids);
   }
 
+  // Allows you to claim the same claimId multiple times but just returns 0
+   function testCanClaimSameAgain() public {
+    vm.startPrank(whitelist);
+    uint lyraAmount = 1000e18;
+    uint opAmount = 500e18;
+    MultiDistributor.UserTokenAmounts[] memory claimsToAdd = _createClaims(alice, lyraAmount, opAmount);
+
+    tokenDistributor.addToClaims(claimsToAdd, block.timestamp, "");
+    vm.stopPrank();
+
+    MultiDistributor.UserAndClaimId[] memory ids = new MultiDistributor.UserAndClaimId[](2);
+    ids[0].user = alice;
+    ids[0].claimId = 0;
+    ids[1].user = alice;
+    ids[1].claimId = 1;
+
+    tokenDistributor.approveClaims(ids, true);
+
+    vm.startPrank(alice);
+
+    tokenDistributor.claim(ids);
+    uint lyraBal = lyra.balanceOf(alice);
+    uint opBal = op.balanceOf(alice);
+
+    assertEq(lyraBal, lyraAmount);
+    assertEq(opBal, opAmount);
+
+    // Able to claim again however balance does NOT increase
+    tokenDistributor.claim(ids);
+    lyraBal = lyra.balanceOf(alice);
+    opBal = op.balanceOf(alice);
+
+    assertEq(lyraBal, lyraAmount);
+    assertEq(opBal, opAmount);
+  }
+
+  // Whitelisted can remove claim 
   function testCanRemoveClaim() public {
     vm.startPrank(whitelist);
     uint lyraAmount = 1000e18;
@@ -141,7 +180,7 @@ contract MultiDistributorTest is Test {
     assertEq(amount1, 0);
   }
 
-  // Not whitelisted
+  // Not whitelisted cannot remove claim
   function testCannotRemoveClaim() public {
     vm.startPrank(whitelist);
     uint lyraAmount = 1000e18;
@@ -162,12 +201,10 @@ contract MultiDistributorTest is Test {
     ids[1].claimId = 1;
 
     vm.stopPrank();
-    tokenDistributor.removeClaims(ids);
 
-    (token, amount, approved) = tokenDistributor.userToClaimIds(alice, 0);
-    (token1, amount1, approved1) = tokenDistributor.userToClaimIds(alice, 1);
-    assertEq(amount, 0);
-    assertEq(amount1, 0);
+    // Reverts because this contract is not whitelisted
+    vm.expectRevert(abi.encodeWithSelector(MultiDistributor.NotWhitelisted.selector, address(this)));
+    tokenDistributor.removeClaims(ids);
   }
 
   function testCanGetClaimableForAddress() public {
@@ -182,7 +219,6 @@ contract MultiDistributorTest is Test {
     ids[0] = 0;
     ids[1] = 1;
     MultiDistributor.UserClaim[] memory claimable = tokenDistributor.getClaimableForAddress(alice, ids);
-    console.log("LOL", claimable[0].amount);
 
     // Should be 0 because not approved
     assertEq(claimable[0].amount, 0);
@@ -202,6 +238,43 @@ contract MultiDistributorTest is Test {
     // Should be show amounts now that we have approved
     assertEq(claimable[0].amount, lyraAmount);
     assertEq(claimable[1].amount, opAmount);
+  }
+
+  // Returns 0 after already claimed
+  function testCannnotGetClaimableForAddress() public {
+    vm.startPrank(whitelist);
+    uint lyraAmount = 1000e18;
+    uint opAmount = 500e18;
+    MultiDistributor.UserTokenAmounts[] memory claimsToAdd = _createClaims(alice, lyraAmount, opAmount);
+
+    tokenDistributor.addToClaims(claimsToAdd, block.timestamp, "");
+
+    uint[] memory ids = new uint[](2);
+    ids[0] = 0;
+    ids[1] = 1;
+    MultiDistributor.UserClaim[] memory claimable = tokenDistributor.getClaimableForAddress(alice, ids);
+
+    // Should be 0 because not approved
+    assertEq(claimable[0].amount, 0);
+    assertEq(claimable[1].amount, 0);
+
+    vm.stopPrank();
+    MultiDistributor.UserAndClaimId[] memory approveIds = new MultiDistributor.UserAndClaimId[](2);
+    approveIds[0].user = alice;
+    approveIds[0].claimId = 0;
+    approveIds[1].user = alice;
+    approveIds[1].claimId = 1;
+
+    tokenDistributor.approveClaims(approveIds, true);
+    
+    vm.startPrank(alice);
+    tokenDistributor.claim(approveIds);
+
+    claimable = tokenDistributor.getClaimableForAddress(alice, ids);
+
+    // Should return 0 because already claimed
+    assertEq(claimable[0].amount, 0);
+    assertEq(claimable[1].amount, 0);
   }
 
   function _createClaims(address user, uint lyraAmount, uint opAmount)
