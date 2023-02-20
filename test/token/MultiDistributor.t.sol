@@ -172,7 +172,7 @@ contract MultiDistributorTest is Test {
     ids[1].user = alice;
     ids[1].claimId = 1;
 
-    vm.stopPrank(); 
+    vm.stopPrank();
     tokenDistributor.removeClaims(ids);
 
     (token, amount, approved) = tokenDistributor.userToClaimIds(alice, 0);

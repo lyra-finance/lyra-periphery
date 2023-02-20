@@ -14,7 +14,7 @@ import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
  */
 
 contract MultiDistributor is Ownable {
-  // Details of created claims 
+  // Details of created claims
   struct UserClaim {
     IERC20 token;
     uint amount;
