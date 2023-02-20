@@ -152,7 +152,7 @@ contract MultiDistributorTest is Test {
     assertEq(opBal, opAmount);
   }
 
-  // Whitelisted can remove claim
+  // Owner can remove claim
   function testCanRemoveClaim() public {
     vm.startPrank(whitelist);
     uint lyraAmount = 1000e18;
@@ -172,6 +172,7 @@ contract MultiDistributorTest is Test {
     ids[1].user = alice;
     ids[1].claimId = 1;
 
+    vm.stopPrank(); 
     tokenDistributor.removeClaims(ids);
 
     (token, amount, approved) = tokenDistributor.userToClaimIds(alice, 0);
@@ -181,7 +182,32 @@ contract MultiDistributorTest is Test {
   }
 
   // Not whitelisted cannot remove claim
-  function testCannotRemoveClaim() public {
+  function testCannotRemoveClaimByWhitelisted() public {
+    vm.startPrank(whitelist);
+    uint lyraAmount = 1000e18;
+    uint opAmount = 500e18;
+    MultiDistributor.UserTokenAmounts[] memory claimsToAdd = _createClaims(alice, lyraAmount, opAmount);
+
+    tokenDistributor.addToClaims(claimsToAdd, block.timestamp, "");
+
+    (IERC20 token, uint amount, bool approved) = tokenDistributor.userToClaimIds(alice, 0);
+    (IERC20 token1, uint amount1, bool approved1) = tokenDistributor.userToClaimIds(alice, 1);
+    assertEq(amount, lyraAmount);
+    assertEq(amount1, opAmount);
+
+    MultiDistributor.UserAndClaimId[] memory ids = new MultiDistributor.UserAndClaimId[](2);
+    ids[0].user = alice;
+    ids[0].claimId = 0;
+    ids[1].user = alice;
+    ids[1].claimId = 1;
+
+    // Reverts because this contract is not whitelisted
+    vm.expectRevert(bytes("Ownable: caller is not the owner"));
+    tokenDistributor.removeClaims(ids);
+  }
+
+  // Not owner cannot remove claim
+  function testCannotRemoveClaimNotOwner() public {
     vm.startPrank(whitelist);
     uint lyraAmount = 1000e18;
     uint opAmount = 500e18;
@@ -201,9 +227,10 @@ contract MultiDistributorTest is Test {
     ids[1].claimId = 1;
 
     vm.stopPrank();
+    vm.startPrank(alice);
 
     // Reverts because this contract is not whitelisted
-    vm.expectRevert(abi.encodeWithSelector(MultiDistributor.NotWhitelisted.selector, address(this)));
+    vm.expectRevert(bytes("Ownable: caller is not the owner"));
     tokenDistributor.removeClaims(ids);
   }
 

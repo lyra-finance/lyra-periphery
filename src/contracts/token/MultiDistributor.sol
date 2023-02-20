@@ -7,24 +7,27 @@ import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 
 /**
  * @title Token Distributor contract.
- * @dev   Whitelisted addresses can create / remove claims for tokens.
- *        Contract owner can approve these claims.
+ * @dev   Whitelisted addresses can create claims for tokens.
+ *        Contract owner can approve / remove these claims.
  *
  * @author Lyra
  */
 
 contract MultiDistributor is Ownable {
+  // Details of created claims 
   struct UserClaim {
     IERC20 token;
     uint amount;
     bool approved;
   }
 
+  // Details for approving, removing claiming claims
   struct UserAndClaimId {
     address user;
     uint claimId;
   }
 
+  // Details for adding new claims
   struct UserTokenAmounts {
     address user;
     IERC20 token;
@@ -68,6 +71,26 @@ contract MultiDistributor is Ownable {
   function approveClaims(UserAndClaimId[] memory claimIds, bool approve) external onlyOwner {
     for (uint i = 0; i < claimIds.length; i++) {
       userToClaimIds[claimIds[i].user][claimIds[i].claimId].approved = approve;
+
+      emit ClaimApproved(claimIds[i].user, claimIds[i].claimId);
+    }
+  }
+
+  /**
+   * @notice Allows whitelisted addresses to remove claims.
+   * @param removeList List of user and claimIds to remove
+   */
+  function removeClaims(UserAndClaimId[] memory removeList) external onlyOwner {
+    for (uint i = 0; i < removeList.length; i++) {
+      uint removedAmount = userToClaimIds[removeList[i].user][removeList[i].claimId].amount;
+      userToClaimIds[removeList[i].user][removeList[i].claimId].amount = 0;
+
+      emit ClaimRemoved(
+        removeList[i].user,
+        removeList[i].claimId,
+        userToClaimIds[removeList[i].user][removeList[i].claimId].token,
+        removedAmount
+        );
     }
   }
 
@@ -92,26 +115,6 @@ contract MultiDistributor is Ownable {
       nextId++;
 
       emit ClaimAdded(claimToAdd.token, claimToAdd.user, newClaim.amount, nextId, epochTimestamp, tag);
-    }
-  }
-
-  /**
-   * @notice Allows whitelisted addresses to remove claims. //todo maybe this should be owner-only?
-   * @param removeList List of user and claimIds to remove
-   */
-  function removeClaims(UserAndClaimId[] memory removeList) external {
-    if (whitelisted[msg.sender] != true) revert NotWhitelisted(msg.sender);
-
-    for (uint i = 0; i < removeList.length; i++) {
-      uint removedAmount = userToClaimIds[removeList[i].user][removeList[i].claimId].amount;
-      userToClaimIds[removeList[i].user][removeList[i].claimId].amount = 0;
-
-      emit ClaimRemoved(
-        removeList[i].user,
-        removeList[i].claimId,
-        userToClaimIds[removeList[i].user][removeList[i].claimId].token,
-        removedAmount
-        );
     }
   }
 
@@ -183,6 +186,8 @@ contract MultiDistributor is Ownable {
   );
 
   event ClaimRemoved(address indexed claimer, uint indexed claimId, IERC20 indexed rewardToken, uint amount);
+
+  event ClaimApproved(address indexed claimer, uint indexed claimId);
 
   ////////////
   // Errors //
