@@ -16,19 +16,6 @@ import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 contract MultiDistributor is Ownable {
   // Details of created claims
   struct UserClaim {
-    IERC20 token;
-    uint amount;
-    bool approved;
-  }
-
-  // Details for approving, removing claiming claims
-  struct UserAndClaimId {
-    address user;
-    uint claimId;
-  }
-
-  // Details for adding new claims
-  struct UserTokenAmounts {
     address user;
     IERC20 token;
     uint amount;
@@ -38,7 +25,8 @@ contract MultiDistributor is Ownable {
   uint nextId;
 
   mapping(address => bool) public whitelisted; // Whitelisted addresses approved for creating claims
-  mapping(address => mapping(uint => UserClaim)) public userToClaimIds; // User -> Id -> Claims
+  mapping(uint => UserClaim) public idsToClaim; // Ids to created claims mapping
+  mapping(uint => bool) public claimApprovals; // ClaimId to approval mapping
   mapping(address => mapping(IERC20 => uint)) public totalClaimed; // User -> Token -> Amount claimed
 
   /////////////////////
@@ -68,29 +56,11 @@ contract MultiDistributor is Ownable {
    * @param claimIds The list of claimIds to approve or unapprove
    * @param approve Bool on whether the ids are being approved or not
    */
-  function approveClaims(UserAndClaimId[] memory claimIds, bool approve) external onlyOwner {
+  function approveClaims(uint[] memory claimIds, bool approve) external onlyOwner {
     for (uint i = 0; i < claimIds.length; i++) {
-      userToClaimIds[claimIds[i].user][claimIds[i].claimId].approved = approve;
+      claimApprovals[claimIds[i]] = approve;
 
-      emit ClaimApproved(claimIds[i].user, claimIds[i].claimId);
-    }
-  }
-
-  /**
-   * @notice Allows whitelisted addresses to remove claims.
-   * @param removeList List of user and claimIds to remove
-   */
-  function removeClaims(UserAndClaimId[] memory removeList) external onlyOwner {
-    for (uint i = 0; i < removeList.length; i++) {
-      uint removedAmount = userToClaimIds[removeList[i].user][removeList[i].claimId].amount;
-      userToClaimIds[removeList[i].user][removeList[i].claimId].amount = 0;
-
-      emit ClaimRemoved(
-        removeList[i].user,
-        removeList[i].claimId,
-        userToClaimIds[removeList[i].user][removeList[i].claimId].token,
-        removedAmount
-        );
+      emit ClaimApproved(claimIds[i]);
     }
   }
 
@@ -105,16 +75,12 @@ contract MultiDistributor is Ownable {
    * @param epochTimestamp The timestamp for the epoch
    * @param tag Data relating to the claim
    */
-  function addToClaims(UserTokenAmounts[] memory claimsToAdd, uint epochTimestamp, string memory tag) external {
+  function addToClaims(UserClaim[] memory claimsToAdd, uint epochTimestamp, string memory tag) external {
     if (whitelisted[msg.sender] != true) revert NotWhitelisted(msg.sender);
 
     for (uint i = 0; i < claimsToAdd.length; i++) {
-      UserTokenAmounts memory claimToAdd = claimsToAdd[i];
-      UserClaim memory newClaim = UserClaim(claimToAdd.token, claimToAdd.amount, false);
-      userToClaimIds[claimToAdd.user][nextId] = newClaim;
-      nextId++;
-
-      emit ClaimAdded(claimToAdd.token, claimToAdd.user, newClaim.amount, nextId, epochTimestamp, tag);
+      idsToClaim[nextId++] = claimsToAdd[i];
+      emit ClaimAdded(claimsToAdd[i].token, claimsToAdd[i].user, claimsToAdd[i].amount, nextId, epochTimestamp, tag);
     }
   }
 
@@ -126,20 +92,18 @@ contract MultiDistributor is Ownable {
    * @notice Allows user to redeem a list of claimIds.
    * @param claimList List of claimIds to claim
    */
-  function claim(UserAndClaimId[] memory claimList) external {
+  function claim(uint[] memory claimList) external {
     for (uint i = 0; i < claimList.length; i++) {
-      uint claimId = claimList[i].claimId;
-
-      UserClaim memory toClaim = userToClaimIds[msg.sender][claimId];
-
-      if (toClaim.approved != true) revert ClaimNotApproved(claimId);
+      uint claimId = claimList[i];
+      if (claimApprovals[claimList[i]] != true) revert ClaimNotApproved(claimId);
+      UserClaim memory toClaim = idsToClaim[claimId];
       uint balanceToClaim = toClaim.amount;
 
       if (balanceToClaim == 0) {
         continue;
       }
 
-      userToClaimIds[msg.sender][claimId].amount = 0;
+      idsToClaim[claimId].amount = 0;
       totalClaimed[msg.sender][toClaim.token] += balanceToClaim;
 
       toClaim.token.transfer(msg.sender, balanceToClaim);
@@ -148,22 +112,17 @@ contract MultiDistributor is Ownable {
   }
 
   /**
-   * @notice Returns approved pending claimIds for a user.
-   * @param user User claims to check
+   * @notice Returns approved pending claimId amounts.
    * @param claimIds The list of claimIds to claim
    */
-  function getClaimableForAddress(address user, uint[] memory claimIds)
-    external
-    view
-    returns (UserClaim[] memory claimable)
-  {
+  function getClaimableForIds(uint[] memory claimIds) external view returns (UserClaim[] memory claimable) {
     claimable = new UserClaim[](claimIds.length);
 
     for (uint i = 0; i < claimIds.length; i++) {
-      UserClaim memory potentialClaim = userToClaimIds[user][claimIds[i]];
+      UserClaim memory potentialClaim = idsToClaim[claimIds[i]];
 
-      if (potentialClaim.amount > 0 && potentialClaim.approved == true) {
-        claimable[i] = UserClaim(potentialClaim.token, potentialClaim.amount, potentialClaim.approved);
+      if (potentialClaim.amount > 0 && claimApprovals[claimIds[i]] == true) {
+        claimable[i] = UserClaim(potentialClaim.user, potentialClaim.token, potentialClaim.amount);
       }
     }
   }
@@ -187,7 +146,7 @@ contract MultiDistributor is Ownable {
 
   event ClaimRemoved(address indexed claimer, uint indexed claimId, IERC20 indexed rewardToken, uint amount);
 
-  event ClaimApproved(address indexed claimer, uint indexed claimId);
+  event ClaimApproved(uint indexed claimId);
 
   ////////////
   // Errors //
