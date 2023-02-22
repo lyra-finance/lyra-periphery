@@ -49,6 +49,7 @@ contract MultiDistributorTest is Test {
     users[1] = bob;
     users[2] = alice;
 
+    // Creates two claims for alice and one claim for bob per token
     _createAndAddClaims(users, lyraAmount, opAmount);
 
     assertEq(tokenDistributor.amountToClaim(0, alice), lyraAmount * 2);
@@ -105,11 +106,10 @@ contract MultiDistributorTest is Test {
     users[2] = alice;
 
     _createAndAddClaims(users, lyraAmount, opAmount);
-    (IERC20 token, bool approved) = tokenDistributor.batchApprovals(0);
-    (IERC20 token1, bool approved1) = tokenDistributor.batchApprovals(1);
+    (, bool approved) = tokenDistributor.batchApprovals(0);
+    (, bool approved1) = tokenDistributor.batchApprovals(1);
 
-    assertEq(address(token), address(lyra));
-    assertEq(address(token1), address(op));
+    // Approvals should be false
     assertEq(approved, false);
     assertEq(approved1, false);
 
@@ -117,6 +117,7 @@ contract MultiDistributorTest is Test {
     ids[0] = 0;
     ids[1] = 1;
 
+    // Approve which should allow alice to claim
     tokenDistributor.approveClaims(ids, true);
 
     vm.startPrank(alice);
@@ -140,11 +141,13 @@ contract MultiDistributorTest is Test {
     users[2] = alice;
 
     _createAndAddClaims(users, lyraAmount, opAmount);
-    (IERC20 token, bool approved) = tokenDistributor.batchApprovals(0);
-    (IERC20 token1, bool approved1) = tokenDistributor.batchApprovals(1);
 
-    assertEq(address(token), address(lyra));
-    assertEq(address(token1), address(op));
+    (, bool approved) = tokenDistributor.batchApprovals(0);
+    (, bool approved1) = tokenDistributor.batchApprovals(1);
+
+    // Approvals should be false
+    assertEq(approved, false);
+    assertEq(approved1, false);
 
     uint[] memory ids = new uint[](2);
     ids[0] = 0;
@@ -155,6 +158,7 @@ contract MultiDistributorTest is Test {
 
     vm.startPrank(alice);
 
+    // Batch not approved so claim should revert
     vm.expectRevert(abi.encodeWithSelector(MultiDistributor.BatchNotApproved.selector, ids[0]));
     tokenDistributor.claim(ids);
   }
@@ -170,11 +174,6 @@ contract MultiDistributorTest is Test {
     users[2] = alice;
 
     _createAndAddClaims(users, lyraAmount, opAmount);
-    (IERC20 token, bool approved) = tokenDistributor.batchApprovals(0);
-    (IERC20 token1, bool approved1) = tokenDistributor.batchApprovals(1);
-
-    assertEq(address(token), address(lyra));
-    assertEq(address(token1), address(op));
 
     uint[] memory ids = new uint[](2);
     ids[0] = 0;
@@ -184,6 +183,7 @@ contract MultiDistributorTest is Test {
 
     vm.startPrank(alice);
 
+    // Claim first time, should receive tokens
     tokenDistributor.claim(ids);
     uint lyraBal = lyra.balanceOf(alice);
     uint opBal = op.balanceOf(alice);
@@ -253,18 +253,23 @@ contract MultiDistributorTest is Test {
     uint[] memory ids = new uint[](2);
     ids[0] = 0;
     ids[1] = 1;
-    uint lyraClaimable = tokenDistributor.getClaimableForUser(ids, alice, lyra);
-    uint opClaimAble = tokenDistributor.getClaimableForUser(ids, alice, op);
 
     tokenDistributor.approveClaims(ids, true);
 
     vm.startPrank(alice);
     tokenDistributor.claim(ids);
 
-    lyraClaimable = tokenDistributor.getClaimableForUser(ids, alice, lyra);
-    opClaimAble = tokenDistributor.getClaimableForUser(ids, alice, op);
+    uint lyraBal = lyra.balanceOf(alice);
+    uint opBal = op.balanceOf(alice);
 
-    // Assert for Alice
+    // Assert that tokens are claimed
+    assertEq(lyraBal, lyraAmount * 2);
+    assertEq(opBal, opAmount * 2);
+
+    uint lyraClaimable = tokenDistributor.getClaimableForUser(ids, alice, lyra);
+    uint opClaimAble = tokenDistributor.getClaimableForUser(ids, alice, op);
+
+    // Claimable should be 0
     assertEq(lyraClaimable, 0);
     assertEq(opClaimAble, 0);
   }
