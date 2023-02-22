@@ -71,7 +71,7 @@ contract MultiDistributorTest is Test {
     users[1] = alice;
 
     // Alice is not whitelisted
-    vm.expectRevert(abi.encodeWithSelector(MultiDistributor.NotWhitelisted.selector, alice));
+    vm.expectRevert(abi.encodeWithSelector(MultiDistributor.MD_NotWhitelisted.selector, alice));
     tokenDistributor.addToClaims(lyraClaims, users, lyra, block.timestamp, "");
   }
 
@@ -90,7 +90,7 @@ contract MultiDistributorTest is Test {
 
     // Array lengths do not match
     vm.expectRevert(
-      abi.encodeWithSelector(MultiDistributor.InvalidArrayLength.selector, lyraClaims.length, users.length)
+      abi.encodeWithSelector(MultiDistributor.MD_InvalidArrayLength.selector, lyraClaims.length, users.length)
     );
     tokenDistributor.addToClaims(lyraClaims, users, lyra, block.timestamp, "");
   }
@@ -159,7 +159,7 @@ contract MultiDistributorTest is Test {
     vm.startPrank(alice);
 
     // Batch not approved so claim should revert
-    vm.expectRevert(abi.encodeWithSelector(MultiDistributor.BatchNotApproved.selector, ids[0]));
+    vm.expectRevert(abi.encodeWithSelector(MultiDistributor.MD_BatchNotApproved.selector, ids[0]));
     tokenDistributor.claim(ids);
   }
 

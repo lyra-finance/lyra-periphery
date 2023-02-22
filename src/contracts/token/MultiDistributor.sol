@@ -83,8 +83,8 @@ contract MultiDistributor is Ownable {
     uint epochTimestamp,
     string memory tag
   ) external {
-    if (whitelisted[msg.sender] != true) revert NotWhitelisted(msg.sender);
-    if (tokenAmounts.length != users.length) revert InvalidArrayLength(tokenAmounts.length, users.length);
+    if (whitelisted[msg.sender] != true) revert MD_NotWhitelisted(msg.sender);
+    if (tokenAmounts.length != users.length) revert MD_InvalidArrayLength(tokenAmounts.length, users.length);
 
     for (uint i = 0; i < users.length; i++) {
       amountToClaim[nextId][users[i]] += tokenAmounts[i];
@@ -105,7 +105,7 @@ contract MultiDistributor is Ownable {
   function claim(uint[] memory claimList) external {
     for (uint i = 0; i < claimList.length; i++) {
       uint batchId = claimList[i];
-      if (batchApprovals[batchId].approved != true) revert BatchNotApproved(batchId);
+      if (batchApprovals[batchId].approved != true) revert MD_BatchNotApproved(batchId);
 
       uint balanceToClaim = amountToClaim[batchId][msg.sender];
       if (balanceToClaim == 0) {
@@ -161,7 +161,7 @@ contract MultiDistributor is Ownable {
   // Errors //
   ////////////
 
-  error NotWhitelisted(address user);
-  error InvalidArrayLength(uint tokenLength, uint userLength);
-  error BatchNotApproved(uint batchId);
+  error MD_NotWhitelisted(address user);
+  error MD_InvalidArrayLength(uint tokenLength, uint userLength);
+  error MD_BatchNotApproved(uint batchId);
 }
