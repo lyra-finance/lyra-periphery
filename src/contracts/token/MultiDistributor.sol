@@ -4,7 +4,7 @@ pragma abicoder v2;
 
 import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
-import "forge-std/Test.sol";
+
 /**
  * @title Token Distributor contract.
  * @dev   Whitelisted addresses can create batched claims for tokens.
@@ -86,13 +86,11 @@ contract MultiDistributor is Ownable {
     if (whitelisted[msg.sender] != true) revert NotWhitelisted(msg.sender);
     if (tokenAmounts.length != users.length) revert InvalidArrayLength(tokenAmounts.length, users.length);
 
-    batchApprovals[nextId].token = token;
-
     for (uint i = 0; i < users.length; i++) {
       amountToClaim[nextId][users[i]] += tokenAmounts[i];
       emit ClaimAdded(token, users[i], tokenAmounts[i], nextId, epochTimestamp, tag);
     }
-    nextId++;
+    batchApprovals[nextId++].token = token;
   }
 
   ////////////////////////////
