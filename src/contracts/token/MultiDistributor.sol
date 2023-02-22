@@ -4,29 +4,28 @@ pragma abicoder v2;
 
 import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
-
+import "forge-std/Test.sol";
 /**
  * @title Token Distributor contract.
- * @dev   Whitelisted addresses can create claims for tokens.
+ * @dev   Whitelisted addresses can create batched claims for tokens.
  *        Contract owner can approve / remove these claims.
  *
  * @author Lyra
  */
 
 contract MultiDistributor is Ownable {
-  // Details of created claims
-  struct UserClaim {
-    address user;
+  // Details for a specific batchId
+  struct Batch {
     IERC20 token;
-    uint amount;
+    bool approved;
   }
 
-  // Claim Ids
+  // Batch Ids
   uint nextId;
 
-  mapping(address => bool) public whitelisted; // Whitelisted addresses approved for creating claims
-  mapping(uint => UserClaim) public idsToClaim; // Ids to created claims mapping
-  mapping(uint => bool) public claimApprovals; // ClaimId to approval mapping
+  mapping(address => bool) public whitelisted; // whitelisted addresses approved for creating claims
+  mapping(uint => Batch) public batchApprovals; // batchId -> Batch details
+  mapping(uint => mapping(address => uint)) public amountToClaim; // batchId -> User -> amount
   mapping(address => mapping(IERC20 => uint)) public totalClaimed; // User -> Token -> Amount claimed
 
   /////////////////////
@@ -51,16 +50,16 @@ contract MultiDistributor is Ownable {
   }
 
   /**
-   * @notice Allows owner to approve or unapprove claimIds.
+   * @notice Allows owner to approve or unapprove batchIds.
    *
-   * @param claimIds The list of claimIds to approve or unapprove
+   * @param batchIds The list of batchIds to approve or unapprove
    * @param approve Bool on whether the ids are being approved or not
    */
-  function approveClaims(uint[] memory claimIds, bool approve) external onlyOwner {
-    for (uint i = 0; i < claimIds.length; i++) {
-      claimApprovals[claimIds[i]] = approve;
+  function approveClaims(uint[] memory batchIds, bool approve) external onlyOwner {
+    for (uint i = 0; i < batchIds.length; i++) {
+      batchApprovals[batchIds[i]].approved = approve;
 
-      emit ClaimApproved(claimIds[i]);
+      emit ClaimApproved(batchIds[i]);
     }
   }
 
@@ -69,19 +68,31 @@ contract MultiDistributor is Ownable {
   //////////////////////////////////
 
   /**
-   * @notice Allows whitelisted addresses to create new claims.
+   * @notice Allows whitelisted addresses to create a batch of new claims.
    *
-   * @param claimsToAdd List of user, tokens and amounts to create claims
+   * @param tokenAmounts List of token amounts to add for the batch
+   * @param users List of user addresses that correspond to the tokenAmounts
+   * @param token The reward token
    * @param epochTimestamp The timestamp for the epoch
    * @param tag Data relating to the claim
    */
-  function addToClaims(UserClaim[] memory claimsToAdd, uint epochTimestamp, string memory tag) external {
+  function addToClaims(
+    uint[] memory tokenAmounts,
+    address[] memory users,
+    IERC20 token,
+    uint epochTimestamp,
+    string memory tag
+  ) external {
     if (whitelisted[msg.sender] != true) revert NotWhitelisted(msg.sender);
+    if (tokenAmounts.length != users.length) revert InvalidArrayLength(tokenAmounts.length, users.length);
 
-    for (uint i = 0; i < claimsToAdd.length; i++) {
-      idsToClaim[nextId++] = claimsToAdd[i];
-      emit ClaimAdded(claimsToAdd[i].token, claimsToAdd[i].user, claimsToAdd[i].amount, nextId, epochTimestamp, tag);
+    batchApprovals[nextId].token = token;
+
+    for (uint i = 0; i < users.length; i++) {
+      amountToClaim[nextId][users[i]] += tokenAmounts[i];
+      emit ClaimAdded(token, users[i], tokenAmounts[i], nextId, epochTimestamp, tag);
     }
+    nextId++;
   }
 
   ////////////////////////////
@@ -89,40 +100,42 @@ contract MultiDistributor is Ownable {
   ////////////////////////////
 
   /**
-   * @notice Allows user to redeem a list of claimIds.
-   * @param claimList List of claimIds to claim
+   * @notice Allows user to redeem a list of batchIds.
+   * @dev Users can only claim their own rewards.
+   * @param claimList List of batchIds to claim
    */
   function claim(uint[] memory claimList) external {
     for (uint i = 0; i < claimList.length; i++) {
-      uint claimId = claimList[i];
-      if (claimApprovals[claimList[i]] != true) revert ClaimNotApproved(claimId);
-      UserClaim memory toClaim = idsToClaim[claimId];
-      uint balanceToClaim = toClaim.amount;
+      uint batchId = claimList[i];
+      if (batchApprovals[batchId].approved != true) revert BatchNotApproved(batchId);
 
+      uint balanceToClaim = amountToClaim[batchId][msg.sender];
       if (balanceToClaim == 0) {
         continue;
       }
 
-      idsToClaim[claimId].amount = 0;
-      totalClaimed[msg.sender][toClaim.token] += balanceToClaim;
+      amountToClaim[batchId][msg.sender] = 0;
+      totalClaimed[msg.sender][batchApprovals[batchId].token] += balanceToClaim;
+      batchApprovals[batchId].token.transfer(msg.sender, balanceToClaim);
 
-      toClaim.token.transfer(msg.sender, balanceToClaim);
-      emit Claimed(toClaim.token, msg.sender, claimId, balanceToClaim);
+      emit Claimed(batchApprovals[batchId].token, msg.sender, batchId, balanceToClaim);
     }
   }
 
   /**
-   * @notice Returns approved pending claimId amounts.
-   * @param claimIds The list of claimIds to claim
+   * @notice Returns the claimable amount of a a specific token for an address.
+   * @param batchIds The list of batchIds to claim
+   * @param user The addresses claimable amount
+   * @param token The claimable amount for this token
    */
-  function getClaimableForIds(uint[] memory claimIds) external view returns (UserClaim[] memory claimable) {
-    claimable = new UserClaim[](claimIds.length);
+  function getClaimableForUser(uint[] memory batchIds, address user, IERC20 token) external view returns (uint amount) {
+    for (uint i = 0; i < batchIds.length; i++) {
+      uint balanceToClaim = amountToClaim[batchIds[i]][user];
 
-    for (uint i = 0; i < claimIds.length; i++) {
-      UserClaim memory potentialClaim = idsToClaim[claimIds[i]];
-
-      if (potentialClaim.amount > 0 && claimApprovals[claimIds[i]] == true) {
-        claimable[i] = UserClaim(potentialClaim.user, potentialClaim.token, potentialClaim.amount);
+      if (
+        balanceToClaim > 0 && batchApprovals[batchIds[i]].approved == true && batchApprovals[batchIds[i]].token == token
+      ) {
+        amount += balanceToClaim;
       }
     }
   }
@@ -133,26 +146,24 @@ contract MultiDistributor is Ownable {
 
   event WhitelistAddressSet(address user, bool whitelisted);
 
-  event Claimed(IERC20 indexed rewardToken, address indexed claimer, uint indexed claimId, uint amount);
+  event Claimed(IERC20 indexed rewardToken, address indexed claimer, uint indexed batchId, uint amount);
 
   event ClaimAdded(
     IERC20 rewardToken,
     address indexed claimer,
     uint amount,
-    uint indexed claimId,
+    uint indexed batchId,
     uint indexed epochTimestamp,
     string tag
   );
 
-  event ClaimRemoved(address indexed claimer, uint indexed claimId, IERC20 indexed rewardToken, uint amount);
-
-  event ClaimApproved(uint indexed claimId);
+  event ClaimApproved(uint indexed batchId);
 
   ////////////
   // Errors //
   ////////////
 
   error NotWhitelisted(address user);
-
-  error ClaimNotApproved(uint claimId);
+  error InvalidArrayLength(uint tokenLength, uint userLength);
+  error BatchNotApproved(uint batchId);
 }
