@@ -285,30 +285,38 @@ contract MultiDistributorTest is Test {
 
     _createAndAddClaims(users, lyraAmount, opAmount);
 
-    uint[] memory ids = new uint[](2);
+    uint[] memory ids = new uint[](3);
     ids[0] = 1;
     ids[1] = 2;
+    ids[2] = 3;
     uint[] memory aliceIds = tokenDistributor.getClaimableIdsForUser(ids, alice);
 
     // Should be 0 because not approved
     assertEq(aliceIds[0], 0);
     assertEq(aliceIds[1], 0);
+    assertEq(aliceIds[2], 0);
 
     // Approve only the first claim
     ids[1] = 0;
+    ids[2] = 0;
     tokenDistributor.approveClaims(ids, true);
     aliceIds = tokenDistributor.getClaimableIdsForUser(ids, alice);
 
     assertEq(aliceIds[0], 1);
     assertEq(aliceIds[1], 0);
+    assertEq(aliceIds[2], 0);
 
-    // Approve the second claim
+    // Approve the other claims
     ids[1] = 2;
+    ids[2] = 3;
     tokenDistributor.approveClaims(ids, true);
     aliceIds = tokenDistributor.getClaimableIdsForUser(ids, alice);
 
     assertEq(aliceIds[0], 1);
     assertEq(aliceIds[1], 2);
+
+    // Empty claim amount is not claimable
+    assertEq(aliceIds[2], 0);
   }
 
   function _createAndAddClaims(address[] memory users, uint lyraAmount, uint opAmount) internal {
@@ -322,9 +330,15 @@ contract MultiDistributorTest is Test {
     opClaims[1] = opAmount;
     opClaims[2] = opAmount;
 
+    uint[] memory emptyClaims = new uint[](3);
+    emptyClaims[0] = 0;
+    emptyClaims[1] = 0;
+    emptyClaims[2] = 0;
+
     vm.startPrank(whitelist);
     tokenDistributor.addToClaims(lyraClaims, users, lyra, block.timestamp, "");
     tokenDistributor.addToClaims(opClaims, users, op, block.timestamp, "");
+    tokenDistributor.addToClaims(emptyClaims, users, op, block.timestamp, "");
     vm.stopPrank();
   }
 }
