@@ -52,10 +52,10 @@ contract MultiDistributorTest is Test {
     // Creates two claims for alice and one claim for bob per token
     _createAndAddClaims(users, lyraAmount, opAmount);
 
-    assertEq(tokenDistributor.amountToClaim(0, alice), lyraAmount * 2);
-    assertEq(tokenDistributor.amountToClaim(0, bob), lyraAmount);
-    assertEq(tokenDistributor.amountToClaim(1, alice), opAmount * 2);
-    assertEq(tokenDistributor.amountToClaim(1, bob), opAmount);
+    assertEq(tokenDistributor.amountToClaim(1, alice), lyraAmount * 2);
+    assertEq(tokenDistributor.amountToClaim(1, bob), lyraAmount);
+    assertEq(tokenDistributor.amountToClaim(2, alice), opAmount * 2);
+    assertEq(tokenDistributor.amountToClaim(2, bob), opAmount);
   }
 
   // Check not whitelisted addresses CANNOT add to claims
@@ -114,8 +114,8 @@ contract MultiDistributorTest is Test {
     assertEq(approved1, false);
 
     uint[] memory ids = new uint[](2);
-    ids[0] = 0;
-    ids[1] = 1;
+    ids[0] = 1;
+    ids[1] = 2;
 
     // Approve which should allow alice to claim
     tokenDistributor.approveClaims(ids, true);
@@ -150,8 +150,8 @@ contract MultiDistributorTest is Test {
     assertEq(approved1, false);
 
     uint[] memory ids = new uint[](2);
-    ids[0] = 0;
-    ids[1] = 1;
+    ids[0] = 1;
+    ids[1] = 2;
 
     // batchIds are not approved
     // tokenDistributor.approveClaims(ids, true);
@@ -176,8 +176,8 @@ contract MultiDistributorTest is Test {
     _createAndAddClaims(users, lyraAmount, opAmount);
 
     uint[] memory ids = new uint[](2);
-    ids[0] = 0;
-    ids[1] = 1;
+    ids[0] = 1;
+    ids[1] = 2;
 
     tokenDistributor.approveClaims(ids, true);
 
@@ -200,7 +200,7 @@ contract MultiDistributorTest is Test {
     assertEq(opBal, opAmount * 2);
   }
 
-  function testCangetClaimableForUser() public {
+  function testCanGetClaimableAmountForUser() public {
     uint lyraAmount = 1000e18;
     uint opAmount = 500e18;
 
@@ -212,10 +212,10 @@ contract MultiDistributorTest is Test {
     _createAndAddClaims(users, lyraAmount, opAmount);
 
     uint[] memory ids = new uint[](2);
-    ids[0] = 0;
-    ids[1] = 1;
-    uint lyraClaimable = tokenDistributor.getClaimableForUser(ids, alice, lyra);
-    uint opClaimAble = tokenDistributor.getClaimableForUser(ids, alice, op);
+    ids[0] = 1;
+    ids[1] = 2;
+    uint lyraClaimable = tokenDistributor.getClaimableAmountForUser(ids, alice, lyra);
+    uint opClaimAble = tokenDistributor.getClaimableAmountForUser(ids, alice, op);
 
     // Should be 0 because not approved
     assertEq(lyraClaimable, 0);
@@ -223,15 +223,15 @@ contract MultiDistributorTest is Test {
 
     tokenDistributor.approveClaims(ids, true);
 
-    lyraClaimable = tokenDistributor.getClaimableForUser(ids, alice, lyra);
-    opClaimAble = tokenDistributor.getClaimableForUser(ids, alice, op);
+    lyraClaimable = tokenDistributor.getClaimableAmountForUser(ids, alice, lyra);
+    opClaimAble = tokenDistributor.getClaimableAmountForUser(ids, alice, op);
 
     // Assert for Alice
     assertEq(lyraClaimable, lyraAmount * 2);
     assertEq(opClaimAble, opAmount * 2);
 
-    lyraClaimable = tokenDistributor.getClaimableForUser(ids, bob, lyra);
-    opClaimAble = tokenDistributor.getClaimableForUser(ids, bob, op);
+    lyraClaimable = tokenDistributor.getClaimableAmountForUser(ids, bob, lyra);
+    opClaimAble = tokenDistributor.getClaimableAmountForUser(ids, bob, op);
 
     // Assert for Bob
     assertEq(lyraClaimable, lyraAmount);
@@ -239,7 +239,7 @@ contract MultiDistributorTest is Test {
   }
 
   // Returns 0 after already claimed
-  function testCannnotgetClaimableForUser() public {
+  function testCannnotGetClaimableAmountForUser() public {
     uint lyraAmount = 1000e18;
     uint opAmount = 500e18;
 
@@ -251,8 +251,8 @@ contract MultiDistributorTest is Test {
     _createAndAddClaims(users, lyraAmount, opAmount);
 
     uint[] memory ids = new uint[](2);
-    ids[0] = 0;
-    ids[1] = 1;
+    ids[0] = 1;
+    ids[1] = 2;
 
     tokenDistributor.approveClaims(ids, true);
 
@@ -266,12 +266,49 @@ contract MultiDistributorTest is Test {
     assertEq(lyraBal, lyraAmount * 2);
     assertEq(opBal, opAmount * 2);
 
-    uint lyraClaimable = tokenDistributor.getClaimableForUser(ids, alice, lyra);
-    uint opClaimAble = tokenDistributor.getClaimableForUser(ids, alice, op);
+    uint lyraClaimable = tokenDistributor.getClaimableAmountForUser(ids, alice, lyra);
+    uint opClaimAble = tokenDistributor.getClaimableAmountForUser(ids, alice, op);
 
     // Claimable should be 0
     assertEq(lyraClaimable, 0);
     assertEq(opClaimAble, 0);
+  }
+
+  function testCanGetClaimableIdsForUser() public {
+    uint lyraAmount = 1000e18;
+    uint opAmount = 500e18;
+
+    address[] memory users = new address[](3);
+    users[0] = alice;
+    users[1] = bob;
+    users[2] = alice;
+
+    _createAndAddClaims(users, lyraAmount, opAmount);
+
+    uint[] memory ids = new uint[](2);
+    ids[0] = 1;
+    ids[1] = 2;
+    uint[] memory aliceIds = tokenDistributor.getClaimableIdsForUser(ids, alice);
+
+    // Should be 0 because not approved
+    assertEq(aliceIds[0], 0);
+    assertEq(aliceIds[1], 0);
+
+    // Approve only the first claim
+    ids[1] = 0;
+    tokenDistributor.approveClaims(ids, true);
+    aliceIds = tokenDistributor.getClaimableIdsForUser(ids, alice);
+
+    assertEq(aliceIds[0], 1);
+    assertEq(aliceIds[1], 0);
+
+    // Approve the second claim
+    ids[1] = 2;
+    tokenDistributor.approveClaims(ids, true);
+    aliceIds = tokenDistributor.getClaimableIdsForUser(ids, alice);
+
+    assertEq(aliceIds[0], 1);
+    assertEq(aliceIds[1], 2);
   }
 
   function _createAndAddClaims(address[] memory users, uint lyraAmount, uint opAmount) internal {

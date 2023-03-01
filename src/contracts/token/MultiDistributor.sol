@@ -21,7 +21,7 @@ contract MultiDistributor is Ownable {
   }
 
   // Batch Ids
-  uint nextId;
+  uint nextId = 1;
 
   mapping(address => bool) public whitelisted; // whitelisted addresses approved for creating claims
   mapping(uint => Batch) public batchApprovals; // batchId -> Batch details
@@ -126,7 +126,11 @@ contract MultiDistributor is Ownable {
    * @param user The addresses claimable amount
    * @param token The claimable amount for this token
    */
-  function getClaimableForUser(uint[] memory batchIds, address user, IERC20 token) external view returns (uint amount) {
+  function getClaimableAmountForUser(uint[] memory batchIds, address user, IERC20 token)
+    external
+    view
+    returns (uint amount)
+  {
     for (uint i = 0; i < batchIds.length; i++) {
       uint balanceToClaim = amountToClaim[batchIds[i]][user];
 
@@ -134,6 +138,25 @@ contract MultiDistributor is Ownable {
         balanceToClaim > 0 && batchApprovals[batchIds[i]].approved == true && batchApprovals[batchIds[i]].token == token
       ) {
         amount += balanceToClaim;
+      }
+    }
+  }
+
+  /**
+   * @notice Returns the claimable ids for an address.
+   * @param batchIds The list of batchIds to check
+   * @param user The addresses claimable amount
+   */
+  function getClaimableIdsForUser(uint[] memory batchIds, address user)
+    external
+    view
+    returns (uint[] memory claimableIds)
+  {
+    uint count;
+    claimableIds = new uint[](batchIds.length);
+    for (uint i = 0; i < batchIds.length; i++) {
+      if (amountToClaim[batchIds[i]][user] > 0 && batchApprovals[batchIds[i]].approved == true) {
+        claimableIds[count++] = batchIds[i];
       }
     }
   }
