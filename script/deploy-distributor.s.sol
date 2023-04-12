@@ -9,12 +9,9 @@ import "forge-std/Script.sol";
 import "script/utils.sol";
 
 contract DeployDistributor is Utils {
-
-
   /// @dev main function
   function run() external {
-
-    uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+    uint deployerPrivateKey = vm.envUint("PRIVATE_KEY");
 
     vm.startBroadcast(deployerPrivateKey);
 
