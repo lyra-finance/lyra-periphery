@@ -5,3 +5,7 @@ lcov.info
 broadcast
 .husky
 .vscode
+.env
+
+# ignore local testnet deployments
+deployments/31337*
