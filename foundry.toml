@@ -4,7 +4,13 @@ out = 'out'
 
 optimizer = true
 optimizer_runs = 10_000
-fs_permissions = [{access = "read", path = "./"}]
+fs_permissions = [{ access = "read-write", path = "./"}]
+
+[rpc_endpoints]
+goerli = "${GOERLI_RPC_URL}"
+
+[etherscan]
+goerli = { key = "${ETHERSCAN_API_KEY}" }
 
 [fmt]
 line_length = 120
