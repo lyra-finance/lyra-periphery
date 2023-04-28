@@ -8,9 +8,13 @@ fs_permissions = [{ access = "read-write", path = "./"}]
 
 [rpc_endpoints]
 goerli = "${GOERLI_RPC_URL}"
+optimism = "${OP_RPC_URL}"
+arbitrum = "${ARBI_RPC_URL}"
 
 [etherscan]
 goerli = { key = "${ETHERSCAN_API_KEY}" }
+optimism = { key = "${OP_ETHERSCAN_API_KEY}" }
+arbitrum = { key = "${ARBI_ETHERSCAN_API_KEY}" }
 
 [fmt]
 line_length = 120
